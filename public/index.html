@@ -80,6 +80,12 @@
     socket.emit('answer', { sdp: answer, target: caller });
   });
 
+  socket.on('new-user', (userId) => {
+    const peer = createPeer(userId);
+    peers[userId] = peer;
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+  });
+
   socket.on('answer', async ({ sdp, caller }) => {
     await peers[caller].setRemoteDescription(new RTCSessionDescription(sdp));
   });

@@ -24,6 +24,10 @@ io.on('connection', (socket) => {
 
     const otherUsers = rooms[roomId].filter(u => u.id !== socket.id).map(u => u.id);
     socket.emit('users', otherUsers);
+
+    otherUsers.forEach(userId => {
+      io.to(userId).emit('new-user', socket.id);
+    });
   });
 
   socket.on('offer', (payload) => {
