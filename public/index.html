@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Груповий відео+аудіо дзвінок (Grid)</title>
+  <title>Груповий відео+аудіо дзвінок</title>
   <style>
     body { font-family: sans-serif; }
     #videos {
@@ -17,12 +17,10 @@
       background: black;
       border-radius: 8px;
     }
-    #userList { margin-top: 10px; padding: 5px; border: 1px solid #ccc; width: 200px; }
   </style>
 </head>
 <body>
 <h2>Відео + Аудіо дзвінок</h2>
-
 <div>
   <label>Ваше ім'я: <input id="username" placeholder="Введіть ім'я"></label>
   <button onclick="joinRoom()">Приєднатись</button>
@@ -32,7 +30,6 @@
   <video id="localVideo" autoplay muted playsinline></video>
 </div>
 
-<h3>Учасники:</h3>
 <ul id="userList"></ul>
 
 <script src="/socket.io/socket.io.js"></script>
@@ -40,7 +37,12 @@
   const socket = io();
   const roomId = 'video-audio-room';
   const peers = {};
-  const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  const config = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+    ]
+  };
   const videos = document.getElementById('videos');
   const localVideo = document.getElementById('localVideo');
   const userList = document.getElementById('userList');
@@ -64,10 +66,16 @@
 
   socket.on('users', (users) => {
     users.forEach(userId => {
-      const peer = createPeer(userId);
+      const peer = createPeer(userId, true);
       peers[userId] = peer;
       localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
     });
+  });
+
+  socket.on('new-user', (userId) => {
+    const peer = createPeer(userId, true);
+    peers[userId] = peer;
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
   });
 
   socket.on('offer', async ({ sdp, caller }) => {
@@ -80,50 +88,21 @@
     socket.emit('answer', { sdp: answer, target: caller });
   });
 
-  socket.on('new-user', (userId) => {
-    const peer = createPeer(userId);
-    peers[userId] = peer;
-    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
-  });
-
   socket.on('answer', async ({ sdp, caller }) => {
-    await peers[caller].setRemoteDescription(new RTCSessionDescription(sdp));
+    if (peers[caller] && peers[caller].signalingState === 'have-local-offer') {
+      await peers[caller].setRemoteDescription(new RTCSessionDescription(sdp));
+    } else {
+      console.warn('Answer ignored: wrong state', peers[caller]?.signalingState);
+    }
   });
 
   socket.on('candidate', async ({ candidate, caller }) => {
-    await peers[caller]?.addIceCandidate(new RTCIceCandidate(candidate));
+    try {
+      await peers[caller]?.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (e) {
+      console.error('Candidate error', e);
+    }
   });
-
-  // function createPeer(targetId, initiator = true) {
-  //   const peer = new RTCPeerConnection(config);
-  //
-  //   peer.onicecandidate = ({ candidate }) => {
-  //     if (candidate) {
-  //       socket.emit('candidate', { target: targetId, candidate });
-  //     }
-  //   };
-  //
-  //   peer.ontrack = ({ streams }) => {
-  //     let video = document.getElementById(`video-${targetId}`);
-  //     if (!video) {
-  //       video = document.createElement('video');
-  //       video.id = `video-${targetId}`;
-  //       video.autoplay = true;
-  //       video.playsInline = true;
-  //       videos.appendChild(video);
-  //     }
-  //     video.srcObject = streams[0];
-  //   };
-  //
-  //   if (initiator) {
-  //     peer.createOffer().then(offer => {
-  //       peer.setLocalDescription(offer);
-  //       socket.emit('offer', { target: targetId, sdp: offer });
-  //     });
-  //   }
-  //
-  //   return peer;
-  // }
 
   function createPeer(targetId, initiator = true) {
     const peer = new RTCPeerConnection(config);
@@ -146,7 +125,6 @@
       video.srcObject = streams[0];
     };
 
-    // Створюємо offer лише якщо ми ініціатор
     if (initiator) {
       peer.createOffer().then(offer => {
         peer.setLocalDescription(offer);
@@ -156,7 +134,6 @@
 
     return peer;
   }
-
 </script>
 </body>
 </html>
