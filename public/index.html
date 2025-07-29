@@ -94,6 +94,37 @@
     await peers[caller]?.addIceCandidate(new RTCIceCandidate(candidate));
   });
 
+  // function createPeer(targetId, initiator = true) {
+  //   const peer = new RTCPeerConnection(config);
+  //
+  //   peer.onicecandidate = ({ candidate }) => {
+  //     if (candidate) {
+  //       socket.emit('candidate', { target: targetId, candidate });
+  //     }
+  //   };
+  //
+  //   peer.ontrack = ({ streams }) => {
+  //     let video = document.getElementById(`video-${targetId}`);
+  //     if (!video) {
+  //       video = document.createElement('video');
+  //       video.id = `video-${targetId}`;
+  //       video.autoplay = true;
+  //       video.playsInline = true;
+  //       videos.appendChild(video);
+  //     }
+  //     video.srcObject = streams[0];
+  //   };
+  //
+  //   if (initiator) {
+  //     peer.createOffer().then(offer => {
+  //       peer.setLocalDescription(offer);
+  //       socket.emit('offer', { target: targetId, sdp: offer });
+  //     });
+  //   }
+  //
+  //   return peer;
+  // }
+
   function createPeer(targetId, initiator = true) {
     const peer = new RTCPeerConnection(config);
 
@@ -115,6 +146,7 @@
       video.srcObject = streams[0];
     };
 
+    // Створюємо offer лише якщо ми ініціатор
     if (initiator) {
       peer.createOffer().then(offer => {
         peer.setLocalDescription(offer);
@@ -124,6 +156,7 @@
 
     return peer;
   }
+
 </script>
 </body>
 </html>
