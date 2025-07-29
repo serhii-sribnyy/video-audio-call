@@ -67,21 +67,21 @@
     users.forEach(userId => {
       const peer = createPeer(userId, true);
       peers[userId] = peer;
-      addTracks(peer);
+      addTracks(peer);  // ✅ додаємо треки
     });
   });
 
   socket.on('new-user', (userId) => {
     const peer = createPeer(userId, true);
     peers[userId] = peer;
-    addTracks(peer);
+    addTracks(peer);  // ✅ додаємо треки
   });
 
   socket.on('offer', async ({ sdp, caller }) => {
     const peer = createPeer(caller, false);
     peers[caller] = peer;
     await peer.setRemoteDescription(new RTCSessionDescription(sdp));
-    addTracks(peer);
+    addTracks(peer);  // ✅ додаємо треки
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
     socket.emit('answer', { sdp: answer, target: caller });
@@ -96,7 +96,6 @@
     }
     await peer.setRemoteDescription(new RTCSessionDescription(sdp));
   });
-
 
   socket.on('candidate', async ({ candidate, caller }) => {
     try {
@@ -133,7 +132,6 @@
         socket.emit('offer', { target: targetId, sdp: offer });
       });
     }
-
 
     return peer;
   }
