@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Груповий відео+аудіо дзвінок (Grid)</title>
+  <style>
+    body { font-family: sans-serif; }
+    #videos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      grid-gap: 10px;
+      padding: 10px;
+    }
+    video {
+      width: 100%;
+      height: auto;
+      background: black;
+      border-radius: 8px;
+    }
+    #userList { margin-top: 10px; padding: 5px; border: 1px solid #ccc; width: 200px; }
+  </style>
+</head>
+<body>
+<h2>Відео + Аудіо дзвінок</h2>
+
+<div>
+  <label>Ваше ім'я: <input id="username" placeholder="Введіть ім'я"></label>
+  <button onclick="joinRoom()">Приєднатись</button>
+</div>
+
+<div id="videos">
+  <video id="localVideo" autoplay muted playsinline></video>
+</div>
+
+<h3>Учасники:</h3>
+<ul id="userList"></ul>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const roomId = 'video-audio-room';
+  const peers = {};
+  const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  const videos = document.getElementById('videos');
+  const localVideo = document.getElementById('localVideo');
+  const userList = document.getElementById('userList');
+  let localStream;
+
+  async function joinRoom() {
+    const username = document.getElementById('username').value || 'Анонім';
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
+    socket.emit('join', { roomId, username });
+  }
+
+  socket.on('user-list', (users) => {
+    userList.innerHTML = '';
+    users.forEach(u => {
+      const li = document.createElement('li');
+      li.textContent = u.name;
+      userList.appendChild(li);
+    });
+  });
+
+  socket.on('users', (users) => {
+    users.forEach(userId => {
+      const peer = createPeer(userId);
+      peers[userId] = peer;
+      localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+    });
+  });
+
+  socket.on('offer', async ({ sdp, caller }) => {
+    const peer = createPeer(caller, false);
+    peers[caller] = peer;
+    await peer.setRemoteDescription(new RTCSessionDescription(sdp));
+    localStream.getTracks().forEach(track => peer.addTrack(track, localStream));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socket.emit('answer', { sdp: answer, target: caller });
+  });
+
+  socket.on('answer', async ({ sdp, caller }) => {
+    await peers[caller].setRemoteDescription(new RTCSessionDescription(sdp));
+  });
+
+  socket.on('candidate', async ({ candidate, caller }) => {
+    await peers[caller]?.addIceCandidate(new RTCIceCandidate(candidate));
+  });
+
+  function createPeer(targetId, initiator = true) {
+    const peer = new RTCPeerConnection(config);
+
+    peer.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        socket.emit('candidate', { target: targetId, candidate });
+      }
+    };
+
+    peer.ontrack = ({ streams }) => {
+      let video = document.getElementById(`video-${targetId}`);
+      if (!video) {
+        video = document.createElement('video');
+        video.id = `video-${targetId}`;
+        video.autoplay = true;
+        video.playsInline = true;
+        videos.appendChild(video);
+      }
+      video.srcObject = streams[0];
+    };
+
+    if (initiator) {
+      peer.createOffer().then(offer => {
+        peer.setLocalDescription(offer);
+        socket.emit('offer', { target: targetId, sdp: offer });
+      });
+    }
+
+    return peer;
+  }
+</script>
+</body>
+</html>
