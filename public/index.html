@@ -88,12 +88,15 @@
   });
 
   socket.on('answer', async ({ sdp, caller }) => {
-    if (peers[caller] && peers[caller].signalingState === 'have-local-offer') {
-      await peers[caller].setRemoteDescription(new RTCSessionDescription(sdp));
-    } else {
-      console.warn('Answer ignored:', peers[caller]?.signalingState);
+    const peer = peers[caller];
+    if (!peer) return;
+    if (peer.signalingState !== 'have-local-offer') {
+      console.warn('Пропускаю answer: стан', peer.signalingState);
+      return;
     }
+    await peer.setRemoteDescription(new RTCSessionDescription(sdp));
   });
+
 
   socket.on('candidate', async ({ candidate, caller }) => {
     try {
@@ -124,12 +127,13 @@
       video.srcObject = streams[0];
     };
 
-    if (initiator) {
+    if (initiator && peer.signalingState === 'stable') {
       peer.createOffer().then(offer => {
         peer.setLocalDescription(offer);
         socket.emit('offer', { target: targetId, sdp: offer });
       });
     }
+
 
     return peer;
   }
